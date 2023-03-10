@@ -1,4 +1,7 @@
 import Link from "next/link"
+import {
+  ConnectButton,
+} from "@rainbow-me/rainbowkit"
 
 import { siteConfig } from "@/config/site"
 import { Icons } from "@/components/icons"
@@ -46,6 +49,7 @@ export function SiteHeader() {
               </div>
             </Link>
             <ThemeToggle />
+            <ConnectButton />
           </nav>
         </div>
       </div>

@@ -12,9 +12,9 @@ interface SiteConfig {
 }
 
 export const siteConfig: SiteConfig = {
-  name: "Next.js",
+  name: "zkprover-dapp",
   description:
-    "Beautifully designed components built with Radix UI and Tailwind CSS.",
+    "zkProver example dapp.",
   mainNav: [
     {
       title: "Home",
@@ -22,8 +22,8 @@ export const siteConfig: SiteConfig = {
     },
   ],
   links: {
-    twitter: "https://twitter.com/shadcn",
-    github: "https://github.com/shadcn/ui",
-    docs: "https://ui.shadcn.com",
+    twitter: "https://twitter.com/Orbiter_Finance",
+    github: "https://github.com/Orbiter-Finance",
+    docs: "https://github.com/Orbiter-Finance",
   },
 }
