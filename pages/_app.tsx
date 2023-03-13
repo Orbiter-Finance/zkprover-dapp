@@ -1,17 +1,15 @@
 import "@/styles/globals.css"
 import "@rainbow-me/rainbowkit/styles.css"
-
-import { Inter as FontSans } from "@next/font/google"
-import { ThemeProvider } from "next-themes"
 import type { AppProps } from "next/app"
-
-import {
-  getDefaultWallets, RainbowKitProvider
-} from "@rainbow-me/rainbowkit"
-import { configureChains, createClient, WagmiConfig } from "wagmi"
+import { Inter as FontSans } from "@next/font/google"
+import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit"
+import { ThemeProvider } from "next-themes"
+import { WagmiConfig, configureChains, createClient } from "wagmi"
 import { arbitrumGoerli, goerli } from "wagmi/chains"
 import { alchemyProvider } from "wagmi/providers/alchemy"
 import { publicProvider } from "wagmi/providers/public"
+
+import { Toaster } from "@/components/ui/toaster"
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -22,7 +20,7 @@ const fontSans = FontSans({
 const alchemyApiKey = process.env.ALCHEMY_API_KEY
 
 const { chains, provider } = configureChains(
-  [goerli, arbitrumGoerli],
+  [arbitrumGoerli, goerli],
   [alchemyProvider({ apiKey: alchemyApiKey }), publicProvider()]
 )
 
@@ -32,10 +30,13 @@ const { connectors } = getDefaultWallets({
 })
 
 const wagmiClient = createClient({
-  autoConnect: true,
+  autoConnect: false,
   connectors,
   provider,
 })
+
+// For fixed this bug: https://github.com/wagmi-dev/wagmi/issues/542
+wagmiClient.autoConnect()
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -49,6 +50,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <WagmiConfig client={wagmiClient}>
           <RainbowKitProvider chains={chains} modalSize="compact">
             <Component {...pageProps} />
+            <Toaster />
           </RainbowKitProvider>
         </WagmiConfig>
       </ThemeProvider>

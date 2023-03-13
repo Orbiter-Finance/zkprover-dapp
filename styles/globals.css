@@ -1,3 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.index-page__card p:last-child {
+  margin-bottom: 0;
+}
