@@ -13,8 +13,7 @@ interface SiteConfig {
 
 export const siteConfig: SiteConfig = {
   name: "zkprover-dapp",
-  description:
-    "zkProver example dapp.",
+  description: "zkProver example dapp.",
   mainNav: [
     {
       title: "Home",
