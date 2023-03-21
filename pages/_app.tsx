@@ -5,7 +5,7 @@ import { Inter as FontSans } from "@next/font/google"
 import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit"
 import { ThemeProvider } from "next-themes"
 import { Chain, WagmiConfig, configureChains, createClient } from "wagmi"
-import { arbitrumGoerli } from "wagmi/chains"
+import { arbitrumGoerli, goerli } from "wagmi/chains"
 import { alchemyProvider } from "wagmi/providers/alchemy"
 import { publicProvider } from "wagmi/providers/public"
 
@@ -52,7 +52,7 @@ const zpGoerliChain: Chain = {
 }
 
 const { chains, provider } = configureChains(
-  [arbitrumGoerli, zpGoerliChain],
+  [arbitrumGoerli, zpGoerliChain, goerli],
   [alchemyProvider({ apiKey: alchemyApiKey }), publicProvider()]
 )
 

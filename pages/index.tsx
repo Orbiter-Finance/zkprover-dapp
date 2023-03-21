@@ -5,7 +5,7 @@ import { useConnectModal } from "@rainbow-me/rainbowkit"
 import { prepareSendTransaction, sendTransaction } from "@wagmi/core"
 import { ethers } from "ethers"
 import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
-import { Link2, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useAccount, useBalance, useNetwork } from "wagmi"
 
 import { cn } from "@/lib/utils"
@@ -13,31 +13,8 @@ import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-interface LinkTextProps {
-  className?: string
-  label?: string
-  content?: string
-  href?: string
-  keepLeft?: number
-  keepRight?: number
-}
-function LinkText(props: PropsWithChildren & LinkTextProps) {
-  const keepLeft = props.keepLeft || 4
-  const keepRight = props.keepRight || 4
-
-  const regex = new RegExp(`^(.{${keepLeft}}).*(.{${keepRight}})$`)
-  const content = props.content?.replace(regex, "$1...$2")
-
-  return (
-    <p className={cn(props.className, "flex items-center")}>
-      {props.label}:&nbsp;{content}
-      <a target="_blank" href={props.href} title="Open in new tab">
-        <Link2 className="ml-1 h-5 w-5 cursor-pointer text-sky-500" />
-      </a>
-    </p>
-  )
-}
+import { DialogFaucetETH } from "@/components/zpui/dialog-faucet-eth"
+import { LinkText } from "@/components/zpui/link-text"
 
 function AccountRequire(props: PropsWithChildren) {
   const { isConnected } = useAccount()
@@ -161,6 +138,7 @@ export default function IndexPage() {
           // type: TransactionTypes.eip1559,
           to: gasReceiver,
           value: parseEther(gasAmount),
+          // data: "0x12342939232832932832",
         },
       })
 
@@ -200,16 +178,22 @@ export default function IndexPage() {
                     href={`${blockExplorerUrl}/address/${account.address}`}
                   />
                   <p className={cardPClass}>
-                    Balance:&nbsp;
+                    Balance ETH:&nbsp;
                     {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
-                    &nbsp;ETH
                   </p>
                   <p className={cardPClass}>
-                    <Button>Faucet</Button>
-                    <span className="block text-xs mt-1 text-slate-700">
-                      Receive 500 OBT and 0.005 ETH at <br />
+                    Balance ZKB:&nbsp;
+                    {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
+                  </p>
+                  <p className={cardPClass}>
+                    <Button>Faucet ZKB</Button>
+                    <DialogFaucetETH>
+                      <Button className="ml-5">Faucet ETH</Button>
+                    </DialogFaucetETH>
+                    {/* <span className="block text-xs mt-1 text-slate-700">
+                      Receive 500 ZPB and 0.005 ETH at <br />
                       the EOA address within 30 minutes
-                    </span>
+                    </span> */}
                   </p>
                 </div>
                 <div className={cardClass}>
@@ -268,7 +252,7 @@ export default function IndexPage() {
                       {sendErc20Loading && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
-                      Send Erc20
+                      Send ERC20
                     </Button>
                   </p>
                   {sendErc20TxHash && (
@@ -321,7 +305,7 @@ export default function IndexPage() {
                       {sendEthLoading && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
-                      Send Eth
+                      Send ETH
                     </Button>
                   </p>
                   {sendEthTxHash && (
