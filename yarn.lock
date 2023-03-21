@@ -1064,13 +1064,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/font@npm:^13.1.6":
-  version: 13.2.4
-  resolution: "@next/font@npm:13.2.4"
-  checksum: f5319c895b6a6633b181f1c17d52dd98753dd7706db27644bf12383e0fa164f5223b8c5c70eb28edb9b9a113cdfb04a995accc16dba1655b850c9db8a05036b7
-  languageName: node
-  linkType: hard
-
 "@next/swc-android-arm-eabi@npm:13.2.4":
   version: 13.2.4
   resolution: "@next/swc-android-arm-eabi@npm:13.2.4"
@@ -9192,7 +9185,6 @@ __metadata:
   resolution: "zkprover-dapp@workspace:."
   dependencies:
     "@ianvs/prettier-plugin-sort-imports": ^3.7.1
-    "@next/font": ^13.1.6
     "@radix-ui/react-accessible-icon": ^1.0.1
     "@radix-ui/react-accordion": ^1.1.0
     "@radix-ui/react-alert-dialog": ^1.0.2
