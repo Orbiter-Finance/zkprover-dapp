@@ -34,7 +34,7 @@ function AccountRequire(props: PropsWithChildren) {
 }
 
 export default function IndexPage() {
-  const setpTitleClass =
+  const stepTitleClass =
     "text-2xl font-extrabold leading-tight tracking-tighter"
   const cardClass =
     "index-page__card mt-5 rounded-md border border-slate-200 p-6 dark:border-slate-700"
@@ -166,7 +166,7 @@ export default function IndexPage() {
       <section className="container grid items-center gap-6 pt-6 pb-8 md:py-10 justify-center">
         <div className="flex max-w-[980px] flex-col items-start gap-2">
           <div>
-            <h3 className={setpTitleClass}>1. Deploy your AA account</h3>
+            <h3 className={stepTitleClass}>1. Deploy your AA account</h3>
             <div className="flex gap-x-7">
               <AccountRequire>
                 <div className={cardClass}>
@@ -208,7 +208,7 @@ export default function IndexPage() {
             </div>
           </div>
           <div>
-            <h3 className={cn(setpTitleClass, "mt-10")}>
+            <h3 className={cn(stepTitleClass, "mt-10")}>
               2. Send transaction test
             </h3>
             <div className="flex gap-x-7">
@@ -323,7 +323,7 @@ export default function IndexPage() {
             </div>
           </div>
           <div>
-            <h3 className={cn(setpTitleClass, "mt-10")}>
+            <h3 className={cn(stepTitleClass, "mt-10")}>
               3. Pay Gas for others
             </h3>
             <div className="flex gap-x-7">

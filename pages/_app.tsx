@@ -1,15 +1,15 @@
 import "@/styles/globals.css"
 import "@rainbow-me/rainbowkit/styles.css"
-import type { AppProps } from "next/app"
-import { Inter as FontSans } from "@next/font/google"
-import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit"
-import { ThemeProvider } from "next-themes"
-import { Chain, WagmiConfig, configureChains, createClient } from "wagmi"
-import { arbitrumGoerli, goerli } from "wagmi/chains"
-import { alchemyProvider } from "wagmi/providers/alchemy"
-import { publicProvider } from "wagmi/providers/public"
+import type {AppProps} from "next/app"
+import {Inter as FontSans} from "@next/font/google"
+import {RainbowKitProvider, getDefaultWallets} from "@rainbow-me/rainbowkit"
+import {ThemeProvider} from "next-themes"
+import {Chain, WagmiConfig, configureChains, createClient} from "wagmi"
+import {arbitrumGoerli, goerli} from "wagmi/chains"
+import {alchemyProvider} from "wagmi/providers/alchemy"
+import {publicProvider} from "wagmi/providers/public"
 
-import { Toaster } from "@/components/ui/toaster"
+import {Toaster} from "@/components/ui/toaster"
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -51,12 +51,12 @@ const zpGoerliChain: Chain = {
   testnet: true,
 }
 
-const { chains, provider } = configureChains(
+const {chains, provider} = configureChains(
   [arbitrumGoerli, zpGoerliChain, goerli],
-  [alchemyProvider({ apiKey: alchemyApiKey }), publicProvider()]
+  [alchemyProvider({apiKey: alchemyApiKey}), publicProvider()]
 )
 
-const { connectors } = getDefaultWallets({
+const {connectors} = getDefaultWallets({
   appName: "zkprover-dapp",
   chains,
 })
@@ -70,19 +70,20 @@ const wagmiClient = createClient({
 // For fixed this bug: https://github.com/wagmi-dev/wagmi/issues/542
 wagmiClient.autoConnect()
 
-export default function App({ Component, pageProps }: AppProps) {
+export default function App({Component, pageProps}: AppProps) {
   return (
     <>
       <style jsx global>{`
-				:root {
-					--font-sans: ${fontSans.style.fontFamily};
-				}
-			}`}</style>
+        :root {
+          --font-sans: ${fontSans.style.fontFamily};
+        }
+
+        }`}</style>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <WagmiConfig client={wagmiClient}>
           <RainbowKitProvider chains={chains} modalSize="compact">
             <Component {...pageProps} />
-            <Toaster />
+            <Toaster/>
           </RainbowKitProvider>
         </WagmiConfig>
       </ThemeProvider>
