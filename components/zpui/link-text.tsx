@@ -22,7 +22,12 @@ export function LinkText(props: PropsWithChildren & LinkTextProps) {
   return (
     <p className={cn(props.className, "flex items-center")}>
       {props.label}:&nbsp;{content}
-      <a target="_blank" href={props.href} title="Open in new tab">
+      <a
+        target="_blank"
+        href={props.href}
+        title="Open in new tab"
+        rel="noreferrer"
+      >
         <Link2 className="ml-1 h-5 w-5 cursor-pointer text-sky-500" />
       </a>
     </p>

@@ -41,7 +41,12 @@ export function DialogFaucetETH(
               </h4>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {item.href}
-                <a href={item.href} title={item.name} target="_blank">
+                <a
+                  href={item.href}
+                  title={item.name}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <Link2 className="inline-block ml-2 w-5" />
                 </a>
               </p>

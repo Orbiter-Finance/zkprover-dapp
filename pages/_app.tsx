@@ -9,6 +9,7 @@ import { arbitrumGoerli, goerli } from "wagmi/chains"
 import { alchemyProvider } from "wagmi/providers/alchemy"
 import { publicProvider } from "wagmi/providers/public"
 
+import { envConfig } from "@/config/env"
 import { Toaster } from "@/components/ui/toaster"
 
 const fontSans = FontSans({
@@ -16,8 +17,6 @@ const fontSans = FontSans({
   variable: "--font-sans",
   display: "swap",
 })
-
-const alchemyApiKey = process.env.ALCHEMY_API_KEY
 
 const zpGoerliChain: Chain = {
   id: 0x4337,
@@ -32,10 +31,10 @@ const zpGoerliChain: Chain = {
   },
   rpcUrls: {
     default: {
-      http: ["http://127.0.0.1:8546"],
+      http: ["http://127.0.0.1:4337"],
     },
     public: {
-      http: ["http://127.0.0.1:8546"],
+      http: ["http://127.0.0.1:4337"],
     },
   },
   blockExplorers: {
@@ -53,7 +52,7 @@ const zpGoerliChain: Chain = {
 
 const { chains, provider } = configureChains(
   [arbitrumGoerli, zpGoerliChain, goerli],
-  [alchemyProvider({ apiKey: alchemyApiKey }), publicProvider()]
+  [alchemyProvider({ apiKey: envConfig.alchemyApiKey }), publicProvider()]
 )
 
 const { connectors } = getDefaultWallets({

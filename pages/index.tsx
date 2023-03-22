@@ -1,13 +1,22 @@
-import { PropsWithChildren, useState } from "react"
+import { PropsWithChildren, useEffect, useState } from "react"
 import Head from "next/head"
 import { useToast } from "@/hooks/use-toast"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
 import { prepareSendTransaction, sendTransaction } from "@wagmi/core"
-import { ethers } from "ethers"
-import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
+import { ContractTransaction, utils } from "ethers"
+import { parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
-import { useAccount, useBalance, useNetwork } from "wagmi"
+import {
+  useAccount,
+  useBalance,
+  useConnect,
+  useContract,
+  useNetwork,
+  useProvider,
+  useSwitchNetwork,
+} from "wagmi"
 
+import { getContractTokenZPB } from "@/config/contracts"
 import { cn } from "@/lib/utils"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
@@ -53,7 +62,13 @@ export default function IndexPage() {
 
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
   const account = useAccount()
+
   const accountBalance = useBalance({ address: account.address })
+  const { switchNetworkAsync } = useSwitchNetwork()
+
+  const [balanceZPB, setBalanceZPB] = useState("")
+  const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
+  const [faucetZPBTxHash, setFaucetZPBTxHash] = useState("")
 
   const [erc20Receiver, setErc20Receiver] = useState("")
   const [erc20Amount, setErc20Amount] = useState("")
@@ -69,6 +84,22 @@ export default function IndexPage() {
   const [gasAmount, setGasAmount] = useState("")
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
+
+  const fetchBalanceZPB = async () => {
+    const address = account?.address
+    if (!address) return
+
+    try {
+      const contract = await getContractTokenZPB()
+      const balance = await contract.balanceOf(address)
+
+      setBalanceZPB(utils.formatEther(balance + ""))
+    } catch (e) {}
+  }
+  useEffect(() => {
+    setBalanceZPB("")
+    fetchBalanceZPB()
+  }, [account.address, useProvider()])
 
   const handleClickSendErc20 = async () => {
     try {
@@ -152,6 +183,34 @@ export default function IndexPage() {
     }
   }
 
+  const handleClickFaucetZPB = async () => {
+    try {
+      if (faucetZPBLoading) {
+        return
+      }
+
+      setFaucetZPBLoading(true)
+      setFaucetZPBTxHash("")
+
+      const currentChainId = await account.connector?.getChainId()
+      if (currentChainId != 5) {
+        await switchNetworkAsync(5)
+      }
+
+      const resp: ContractTransaction = await (
+        await getContractTokenZPB()
+      ).mint(account.address, utils.parseEther("100"))
+
+      setFaucetZPBTxHash(resp.hash)
+
+      await resp.wait().then(fetchBalanceZPB)
+    } catch (e) {
+      errorToast(e.message)
+    } finally {
+      setFaucetZPBLoading(false)
+    }
+  }
+
   return (
     <Layout>
       <Head>
@@ -182,11 +241,19 @@ export default function IndexPage() {
                     {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
                   </p>
                   <p className={cardPClass}>
-                    Balance ZKB:&nbsp;
-                    {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
+                    Balance ZPB:&nbsp;
+                    {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
                   </p>
                   <p className={cardPClass}>
-                    <Button>Faucet ZKB</Button>
+                    <Button
+                      disabled={faucetZPBLoading}
+                      onClick={handleClickFaucetZPB}
+                    >
+                      {faucetZPBLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Faucet ZPB
+                    </Button>
                     <DialogFaucetETH>
                       <Button className="ml-5">Faucet ETH</Button>
                     </DialogFaucetETH>
@@ -195,6 +262,16 @@ export default function IndexPage() {
                       the EOA address within 30 minutes
                     </span> */}
                   </p>
+                  {faucetZPBTxHash && (
+                    <LinkText
+                      className={cardPClass}
+                      label="TxHash"
+                      content={faucetZPBTxHash}
+                      href={`${blockExplorerUrl}/tx/${faucetZPBTxHash}`}
+                      keepLeft={10}
+                      keepRight={8}
+                    />
+                  )}
                 </div>
                 <div className={cardClass}>
                   <p className={cardTitleClass}>AA Address</p>
