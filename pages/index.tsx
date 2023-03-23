@@ -2,15 +2,13 @@ import { PropsWithChildren, useEffect, useState } from "react"
 import Head from "next/head"
 import { useToast } from "@/hooks/use-toast"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
-import { prepareSendTransaction, sendTransaction } from "@wagmi/core"
+import { goerli, prepareSendTransaction, sendTransaction } from "@wagmi/core"
 import { ContractTransaction, utils } from "ethers"
-import { parseEther } from "ethers/lib/utils.js"
+import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
 import {
   useAccount,
   useBalance,
-  useConnect,
-  useContract,
   useNetwork,
   useProvider,
   useSwitchNetwork,
@@ -24,6 +22,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DialogFaucetETH } from "@/components/zpui/dialog-faucet-eth"
 import { LinkText } from "@/components/zpui/link-text"
+
+// Style classes
+const stepTitleClass = "text-2xl font-extrabold leading-tight tracking-tighter"
+const cardClass =
+  "index-page__card mt-5 rounded-md border border-slate-200 p-6 dark:border-slate-700"
+const cardTitleClass = "font-extrabold text-center mb-4"
+const cardPClass = "mb-4"
+const cardPSmClass = "text-sm font-medium"
+
+function useErrorToast() {
+  const { toast } = useToast()
+  return (description: string) => {
+    toast({
+      variant: "destructive",
+      title: "Uh oh! Something went wrong.",
+      description,
+    })
+  }
+}
 
 function AccountRequire(props: PropsWithChildren) {
   const { isConnected } = useAccount()
@@ -42,23 +59,8 @@ function AccountRequire(props: PropsWithChildren) {
   )
 }
 
-export default function IndexPage() {
-  const stepTitleClass =
-    "text-2xl font-extrabold leading-tight tracking-tighter"
-  const cardClass =
-    "index-page__card mt-5 rounded-md border border-slate-200 p-6 dark:border-slate-700"
-  const cardTitleClass = "font-extrabold text-center mb-4"
-  const cardPClass = "mb-4"
-  const cardPSmClass = "text-sm font-medium"
-
-  const { toast } = useToast()
-  const errorToast = (description: string) => {
-    toast({
-      variant: "destructive",
-      title: "Uh oh! Something went wrong.",
-      description,
-    })
-  }
+function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
+  const errorToast = useErrorToast()
 
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
   const account = useAccount()
@@ -69,21 +71,6 @@ export default function IndexPage() {
   const [balanceZPB, setBalanceZPB] = useState("")
   const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
   const [faucetZPBTxHash, setFaucetZPBTxHash] = useState("")
-
-  const [erc20Receiver, setErc20Receiver] = useState("")
-  const [erc20Amount, setErc20Amount] = useState("")
-  const [sendErc20Loading, setSendErc20Loading] = useState(false)
-  const [sendErc20TxHash, setSendErc20Hash] = useState("")
-
-  const [ethReceiver, setEthReceiver] = useState("")
-  const [ethAmount, setEthAmount] = useState("")
-  const [sendEthLoading, setSendEthLoading] = useState(false)
-  const [sendEthTxHash, setSendEthHash] = useState("")
-
-  const [gasReceiver, setGasReceiver] = useState("")
-  const [gasAmount, setGasAmount] = useState("")
-  const [gasLoading, setGasLoading] = useState(false)
-  const [gasTxHash, setGasTxHash] = useState("")
 
   const fetchBalanceZPB = async () => {
     const address = account?.address
@@ -101,6 +88,102 @@ export default function IndexPage() {
     fetchBalanceZPB()
   }, [account.address, useProvider()])
 
+  const handleClickFaucetZPB = async () => {
+    try {
+      if (faucetZPBLoading) {
+        return
+      }
+
+      setFaucetZPBLoading(true)
+      setFaucetZPBTxHash("")
+
+      const currentChainId = await account.connector?.getChainId()
+      if (currentChainId != goerli.id) {
+        await switchNetworkAsync(goerli.id)
+      }
+
+      const resp: ContractTransaction = await (
+        await getContractTokenZPB()
+      ).mint(account.address, utils.parseEther("100"))
+
+      setFaucetZPBTxHash(resp.hash)
+
+      await resp.wait().then(props.onSucceed).then(fetchBalanceZPB)
+    } catch (e) {
+      errorToast(e.message)
+    } finally {
+      setFaucetZPBLoading(false)
+    }
+  }
+
+  return (
+    <div className={cardClass}>
+      <p className={cardTitleClass}>
+        {props.isAA ? "AA Address" : "EOA Address"}
+      </p>
+      <LinkText
+        className={cardPClass}
+        label="Address"
+        content={account.address}
+        href={`${blockExplorerUrl}/address/${account.address}`}
+      />
+      <p className={cardPClass}>
+        Balance ETH:&nbsp;
+        {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
+      </p>
+      <p className={cardPClass}>
+        Balance ZPB:&nbsp;
+        {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
+      </p>
+      <p className={cardPClass}>
+        <Button disabled={faucetZPBLoading} onClick={handleClickFaucetZPB}>
+          {faucetZPBLoading && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          Faucet ZPB
+        </Button>
+        <DialogFaucetETH>
+          <Button className="ml-5">Faucet ETH</Button>
+        </DialogFaucetETH>
+        {/* <span className="block text-xs mt-1 text-slate-700">
+        Receive 100 ZPB and 0.005 ETH at <br />
+        the EOA address within 30 minutes
+      </span> */}
+      </p>
+      {faucetZPBTxHash && (
+        <LinkText
+          className={cardPClass}
+          label="TxHash"
+          content={faucetZPBTxHash}
+          href={`${blockExplorerUrl}/tx/${faucetZPBTxHash}`}
+          keepLeft={10}
+          keepRight={8}
+        />
+      )}
+    </div>
+  )
+}
+
+export default function IndexPage() {
+  const errorToast = useErrorToast()
+
+  const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
+
+  const [erc20Receiver, setErc20Receiver] = useState("")
+  const [erc20Amount, setErc20Amount] = useState("")
+  const [sendErc20Loading, setSendErc20Loading] = useState(false)
+  const [sendErc20TxHash, setSendErc20Hash] = useState("")
+
+  const [ethReceiver, setEthReceiver] = useState("")
+  const [ethAmount, setEthAmount] = useState("")
+  const [sendEthLoading, setSendEthLoading] = useState(false)
+  const [sendEthTxHash, setSendEthHash] = useState("")
+
+  const [gasReceiver, setGasReceiver] = useState("")
+  const [gasAmount, setGasAmount] = useState("")
+  const [gasLoading, setGasLoading] = useState(false)
+  const [gasTxHash, setGasTxHash] = useState("")
+
   const handleClickSendErc20 = async () => {
     try {
       if (sendErc20Loading) {
@@ -113,7 +196,7 @@ export default function IndexPage() {
       // Todo
       const config = await prepareSendTransaction({
         request: {
-          // type: TransactionTypes.eip1559,
+          type: TransactionTypes.eip1559,
           to: erc20Receiver,
           value: parseEther(erc20Amount),
         },
@@ -183,34 +266,6 @@ export default function IndexPage() {
     }
   }
 
-  const handleClickFaucetZPB = async () => {
-    try {
-      if (faucetZPBLoading) {
-        return
-      }
-
-      setFaucetZPBLoading(true)
-      setFaucetZPBTxHash("")
-
-      const currentChainId = await account.connector?.getChainId()
-      if (currentChainId != 5) {
-        await switchNetworkAsync(5)
-      }
-
-      const resp: ContractTransaction = await (
-        await getContractTokenZPB()
-      ).mint(account.address, utils.parseEther("100"))
-
-      setFaucetZPBTxHash(resp.hash)
-
-      await resp.wait().then(fetchBalanceZPB)
-    } catch (e) {
-      errorToast(e.message)
-    } finally {
-      setFaucetZPBLoading(false)
-    }
-  }
-
   return (
     <Layout>
       <Head>
@@ -228,59 +283,8 @@ export default function IndexPage() {
             <h3 className={stepTitleClass}>1. Deploy your AA account</h3>
             <div className="flex gap-x-7">
               <AccountRequire>
-                <div className={cardClass}>
-                  <p className={cardTitleClass}>EOA Address</p>
-                  <LinkText
-                    className={cardPClass}
-                    label="Address"
-                    content={account.address}
-                    href={`${blockExplorerUrl}/address/${account.address}`}
-                  />
-                  <p className={cardPClass}>
-                    Balance ETH:&nbsp;
-                    {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
-                  </p>
-                  <p className={cardPClass}>
-                    Balance ZPB:&nbsp;
-                    {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
-                  </p>
-                  <p className={cardPClass}>
-                    <Button
-                      disabled={faucetZPBLoading}
-                      onClick={handleClickFaucetZPB}
-                    >
-                      {faucetZPBLoading && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Faucet ZPB
-                    </Button>
-                    <DialogFaucetETH>
-                      <Button className="ml-5">Faucet ETH</Button>
-                    </DialogFaucetETH>
-                    {/* <span className="block text-xs mt-1 text-slate-700">
-                      Receive 500 ZPB and 0.005 ETH at <br />
-                      the EOA address within 30 minutes
-                    </span> */}
-                  </p>
-                  {faucetZPBTxHash && (
-                    <LinkText
-                      className={cardPClass}
-                      label="TxHash"
-                      content={faucetZPBTxHash}
-                      href={`${blockExplorerUrl}/tx/${faucetZPBTxHash}`}
-                      keepLeft={10}
-                      keepRight={8}
-                    />
-                  )}
-                </div>
-                <div className={cardClass}>
-                  <p className={cardTitleClass}>AA Address</p>
-                  <p className={cardPClass}>Address: 0x2121...1224</p>
-                  <p className={cardPClass}>Balance:&nbsp;-&nbsp;ETH</p>
-                  <p className={cn(cardPClass, "flex")}>
-                    <Button>Deploy</Button>
-                  </p>
-                </div>
+                <FaucetCard />
+                <FaucetCard isAA={true} />
               </AccountRequire>
             </div>
           </div>
