@@ -14,7 +14,10 @@ import {
   useSwitchNetwork,
 } from "wagmi"
 
-import { getContractTokenZPB } from "@/config/contracts"
+import {
+  getContractAccountFactory,
+  getContractTokenZPB,
+} from "@/config/contracts"
 import { cn } from "@/lib/utils"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
@@ -115,6 +118,15 @@ function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
       setFaucetZPBLoading(false)
     }
   }
+
+  process.nextTick(async () => {
+    const accountFactory = await getContractAccountFactory()
+    // const result = await accountFactory.getAddress(
+    //   "0x6ce4D9694c1626862234216bA78874dE70903A71",
+    //   "0x0"
+    // )
+    // console.warn("result:", result)
+  })
 
   return (
     <div className={cardClass}>

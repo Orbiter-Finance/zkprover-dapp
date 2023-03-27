@@ -3,4 +3,5 @@ export const envConfig = {
 
   addressTokenZKB: process.env.NEXT_PUBLIC_ADDRESS_TOKEN_ZKB,
   addressEntryPoint: process.env.NEXT_PUBLIC_ADDRESS_ENTRY_POINT,
+  addressAccountFactory: process.env.NEXT_PUBLIC_ADDRESS_ACCOUNT_FACTORY,
 }
