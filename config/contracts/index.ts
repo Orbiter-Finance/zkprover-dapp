@@ -18,7 +18,7 @@ export async function getContractTokenZPB() {
 export async function getContractAccountFactory() {
   const signerOrProvider = await getSignerOrProvider()
   return new Contract(
-    envConfig.addressTokenZKB,
+    envConfig.addressAccountFactory,
     AccountFactoryAbi,
     signerOrProvider
   )

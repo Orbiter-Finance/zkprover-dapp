@@ -53,11 +53,11 @@ export function DialogFaucetETH(
             </div>
           ))}
         </div>
-        <DialogFooter>
+        {/* <DialogFooter>
           <DialogTrigger>
             <Button type="submit">Ok, i know</Button>
           </DialogTrigger>
-        </DialogFooter>
+        </DialogFooter> */}
       </DialogContent>
     </Dialog>
   )

@@ -62,10 +62,13 @@ function AccountRequire(props: PropsWithChildren) {
   )
 }
 
-function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
+function FaucetCard(props: { isAA?: boolean }) {
+  const AA_SALT = "0x0"
+
   const errorToast = useErrorToast()
 
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
+  const provider = useProvider()
   const account = useAccount()
 
   const accountBalance = useBalance({ address: account.address })
@@ -75,21 +78,74 @@ function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
   const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
   const [faucetZPBTxHash, setFaucetZPBTxHash] = useState("")
 
+  const [aaAddress, setAAAddress] = useState("")
+  const [aaBalance, setAABalance] = useState("")
+  const [aaDeployStatus, setAADeployStatus] = useState(0)
+  const [aaDeploying, setAADeploying] = useState(false)
+  const [aaDeployHash, setAADeployHash] = useState("")
+
   const fetchBalanceZPB = async () => {
     const address = account?.address
     if (!address) return
 
     try {
       const contract = await getContractTokenZPB()
-      const balance = await contract.balanceOf(address)
+      const balance = await contract.balanceOf(props.isAA ? aaAddress : address)
 
       setBalanceZPB(utils.formatEther(balance + ""))
     } catch (e) {}
   }
-  useEffect(() => {
-    setBalanceZPB("")
-    fetchBalanceZPB()
-  }, [account.address, useProvider()])
+  const fetchAAInfo = async () => {
+    setAADeployStatus(0)
+
+    const address = account?.address
+    if (!address || !props.isAA) return
+
+    try {
+      const accountFactory = await getContractAccountFactory()
+      const _aaAddress =
+        (await accountFactory.getAddress(address, AA_SALT)) + ""
+
+      if (!_aaAddress) return
+
+      setAAAddress(_aaAddress)
+
+      await Promise.all([
+        provider
+          .getBalance(_aaAddress)
+          .then((_balance) => setAABalance(_balance + "")),
+        provider.getCode(_aaAddress).then((_code) => {
+          setAADeployStatus(_code.length > 9 ? 1 : -1) // '0x' or 'undefined'
+        }),
+      ])
+    } catch (e) {}
+  }
+
+  if (props.isAA) {
+    useEffect(() => {
+      fetchAAInfo()
+    }, [account.address, provider])
+
+    useEffect(() => {
+      setBalanceZPB("")
+      fetchBalanceZPB()
+    }, [aaAddress])
+  } else {
+    useEffect(() => {
+      setBalanceZPB("")
+      fetchBalanceZPB()
+    }, [account.address, provider])
+  }
+
+  const displayAddress = () => {
+    return (props.isAA ? aaAddress : account.address) || "-"
+  }
+  const displayBalanceETH = () => {
+    const b = props.isAA ? aaBalance : accountBalance?.data.value
+
+    if (!b) return "-"
+    else return parseFloat(utils.formatEther(b + "")).toFixed(4)
+  }
 
   const handleClickFaucetZPB = async () => {
     try {
@@ -105,13 +161,18 @@ function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
         await switchNetworkAsync(goerli.id)
       }
 
+      const to = props.isAA ? aaAddress : account.address
+      if (!to) {
+        throw new Error("Waitting fetch to address")
+      }
+
       const resp: ContractTransaction = await (
         await getContractTokenZPB()
-      ).mint(account.address, utils.parseEther("100"))
+      ).mint(to, utils.parseEther("100"))
 
       setFaucetZPBTxHash(resp.hash)
 
-      await resp.wait().then(props.onSucceed).then(fetchBalanceZPB)
+      await resp.wait().then(fetchBalanceZPB)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -119,35 +180,55 @@ function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
     }
   }
 
-  process.nextTick(async () => {
-    const accountFactory = await getContractAccountFactory()
-    // const result = await accountFactory.getAddress(
-    //   "0x6ce4D9694c1626862234216bA78874dE70903A71",
-    //   "0x0"
-    // )
-    // console.warn("result:", result)
-  })
+  const handleClickAADeploy = async () => {
+    try {
+      if (aaDeploying) {
+        return
+      }
 
-  return (
-    <div className={cardClass}>
-      <p className={cardTitleClass}>
-        {props.isAA ? "AA Address" : "EOA Address"}
-      </p>
-      <LinkText
-        className={cardPClass}
-        label="Address"
-        content={account.address}
-        href={`${blockExplorerUrl}/address/${account.address}`}
-      />
-      <p className={cardPClass}>
-        Balance ETH:&nbsp;
-        {parseFloat(accountBalance?.data?.formatted).toFixed(4)}
-      </p>
-      <p className={cardPClass}>
-        Balance ZPB:&nbsp;
-        {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
-      </p>
-      <p className={cardPClass}>
+      setAADeploying(true)
+      setAADeployHash("")
+
+      const currentChainId = await account.connector?.getChainId()
+      if (currentChainId != goerli.id) {
+        await switchNetworkAsync(goerli.id)
+      }
+
+      const resp: ContractTransaction = await (
+        await getContractAccountFactory()
+      ).createAccount(account.address, AA_SALT)
+
+      setAADeployHash(resp.hash)
+
+      await resp.wait()
+
+      setAADeployStatus(1)
+    } catch (e) {
+      errorToast(e.message)
+    } finally {
+      setAADeploying(false)
+    }
+  }
+
+  const ActiveButtuns = () => {
+    if (props.isAA && aaDeployStatus == 0)
+      return (
+        <Button disabled={true}>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Checking AA Contract
+        </Button>
+      )
+
+    if (props.isAA && aaDeployStatus == -1)
+      return (
+        <Button disabled={aaDeploying} onClick={handleClickAADeploy}>
+          {aaDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Deploy AA Contract
+        </Button>
+      )
+
+    return (
+      <>
         <Button disabled={faucetZPBLoading} onClick={handleClickFaucetZPB}>
           {faucetZPBLoading && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -157,17 +238,48 @@ function FaucetCard(props: { isAA?: boolean; onSucceed?: () => void }) {
         <DialogFaucetETH>
           <Button className="ml-5">Faucet ETH</Button>
         </DialogFaucetETH>
-        {/* <span className="block text-xs mt-1 text-slate-700">
-        Receive 100 ZPB and 0.005 ETH at <br />
-        the EOA address within 30 minutes
-      </span> */}
+      </>
+    )
+  }
+
+  return (
+    <div className={cardClass}>
+      <p className={cardTitleClass}>
+        {props.isAA ? "AA Address" : "EOA Address"}
+      </p>
+      <LinkText
+        className={cardPClass}
+        label="Address"
+        content={displayAddress()}
+        href={`${blockExplorerUrl}/address/${displayAddress()}`}
+      />
+      <p className={cardPClass}>
+        Balance ETH:&nbsp;
+        {displayBalanceETH()}
+      </p>
+      <p className={cardPClass}>
+        Balance ZPB:&nbsp;
+        {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
+      </p>
+      <p className={cardPClass}>
+        <ActiveButtuns />
       </p>
       {faucetZPBTxHash && (
         <LinkText
           className={cardPClass}
-          label="TxHash"
+          label="FaucetTxHash"
           content={faucetZPBTxHash}
           href={`${blockExplorerUrl}/tx/${faucetZPBTxHash}`}
+          keepLeft={10}
+          keepRight={8}
+        />
+      )}
+      {aaDeployHash && (
+        <LinkText
+          className={cardPClass}
+          label="DeployTxHash"
+          content={aaDeployHash}
+          href={`${blockExplorerUrl}/tx/${aaDeployHash}`}
           keepLeft={10}
           keepRight={8}
         />
