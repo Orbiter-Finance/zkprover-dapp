@@ -2,20 +2,21 @@ import { PropsWithChildren, useEffect, useState } from "react"
 import Head from "next/head"
 import { useToast } from "@/hooks/use-toast"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
-import { goerli, prepareSendTransaction, sendTransaction } from "@wagmi/core"
+import {
+  getProvider,
+  goerli,
+  prepareSendTransaction,
+  sendTransaction,
+  switchNetwork,
+} from "@wagmi/core"
 import { ContractTransaction, utils } from "ethers"
 import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
-import {
-  useAccount,
-  useBalance,
-  useNetwork,
-  useProvider,
-  useSwitchNetwork,
-} from "wagmi"
+import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
 
 import {
   getContractAccountFactory,
+  getContractEntryPoint,
   getContractTokenZPB,
 } from "@/config/contracts"
 import { cn } from "@/lib/utils"
@@ -42,6 +43,13 @@ function useErrorToast() {
       title: "Uh oh! Something went wrong.",
       description,
     })
+  }
+}
+
+async function ensureNetwork(targetChainId: number) {
+  const currentChainId = getProvider()?.network?.chainId
+  if (currentChainId != targetChainId) {
+    await switchNetwork({ chainId: targetChainId })
   }
 }
 
@@ -72,7 +80,6 @@ function FaucetCard(props: { isAA?: boolean }) {
   const account = useAccount()
 
   const accountBalance = useBalance({ address: account.address })
-  const { switchNetworkAsync } = useSwitchNetwork()
 
   const [balanceZPB, setBalanceZPB] = useState("")
   const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
@@ -96,10 +103,12 @@ function FaucetCard(props: { isAA?: boolean }) {
     } catch (e) {}
   }
   const fetchAAInfo = async () => {
-    setAADeployStatus(0)
-
     const address = account?.address
     if (!address || !props.isAA) return
+
+    setAAAddress("")
+    setAABalance("")
+    setAADeployStatus(0)
 
     try {
       const accountFactory = await getContractAccountFactory()
@@ -141,7 +150,7 @@ function FaucetCard(props: { isAA?: boolean }) {
     return (props.isAA ? aaAddress : account.address) || "-"
   }
   const displayBalanceETH = () => {
-    const b = props.isAA ? aaBalance : accountBalance?.data.value
+    const b = props.isAA ? aaBalance : accountBalance?.data?.value
 
     if (!b) return "-"
     else return parseFloat(utils.formatEther(b + "")).toFixed(4)
@@ -156,10 +165,7 @@ function FaucetCard(props: { isAA?: boolean }) {
       setFaucetZPBLoading(true)
       setFaucetZPBTxHash("")
 
-      const currentChainId = await account.connector?.getChainId()
-      if (currentChainId != goerli.id) {
-        await switchNetworkAsync(goerli.id)
-      }
+      await ensureNetwork(goerli.id)
 
       const to = props.isAA ? aaAddress : account.address
       if (!to) {
@@ -189,10 +195,7 @@ function FaucetCard(props: { isAA?: boolean }) {
       setAADeploying(true)
       setAADeployHash("")
 
-      const currentChainId = await account.connector?.getChainId()
-      if (currentChainId != goerli.id) {
-        await switchNetworkAsync(goerli.id)
-      }
+      await ensureNetwork(goerli.id)
 
       const resp: ContractTransaction = await (
         await getContractAccountFactory()
@@ -307,6 +310,15 @@ export default function IndexPage() {
   const [gasAmount, setGasAmount] = useState("")
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
+
+  process.nextTick(async () => {
+    const entryPoint = await getContractEntryPoint()
+    const result = await entryPoint.getDepositInfo(
+      "0xF2BE509057855b055f0515CCD0223BEf84D19ad4"
+    )
+
+    console.warn("result:", JSON.stringify(result))
+  })
 
   const handleClickSendErc20 = async () => {
     try {
