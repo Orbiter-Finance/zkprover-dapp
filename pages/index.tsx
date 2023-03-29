@@ -16,7 +16,6 @@ import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
 
 import {
   getContractAccountFactory,
-  getContractEntryPoint,
   getContractTokenZPB,
 } from "@/config/contracts"
 import { cn } from "@/lib/utils"
@@ -130,21 +129,20 @@ function FaucetCard(props: { isAA?: boolean }) {
     } catch (e) {}
   }
 
-  if (props.isAA) {
-    useEffect(() => {
+  useEffect(() => {
+    if (props.isAA) {
       fetchAAInfo()
-    }, [account.address, provider])
-
-    useEffect(() => {
+    } else {
       setBalanceZPB("")
       fetchBalanceZPB()
-    }, [aaAddress])
-  } else {
-    useEffect(() => {
+    }
+  }, [account.address, provider])
+  useEffect(() => {
+    if (props.isAA) {
       setBalanceZPB("")
       fetchBalanceZPB()
-    }, [account.address, provider])
-  }
+    }
+  }, [aaAddress])
 
   const displayAddress = () => {
     return (props.isAA ? aaAddress : account.address) || "-"
@@ -310,15 +308,6 @@ export default function IndexPage() {
   const [gasAmount, setGasAmount] = useState("")
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
-
-  process.nextTick(async () => {
-    const entryPoint = await getContractEntryPoint()
-    const result = await entryPoint.getDepositInfo(
-      "0xF2BE509057855b055f0515CCD0223BEf84D19ad4"
-    )
-
-    console.warn("result:", JSON.stringify(result))
-  })
 
   const handleClickSendErc20 = async () => {
     try {
