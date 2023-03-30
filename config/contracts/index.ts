@@ -2,6 +2,7 @@ import { getAccount, getProvider } from "@wagmi/core"
 import { Contract, providers, Signer } from "ethers"
 
 import { envConfig } from "../env"
+import AccountAbi from "./Account.abi.json"
 import AccountFactoryAbi from "./AccountFactory.abi.json"
 import EntryPointAbi from "./EntryPoint.abi.json"
 import TokenZPBAbi from "./TokenZPB.abi.json"
@@ -33,6 +34,16 @@ export async function getContractEntryPoint(signerOrProvider?: providers.Provide
   return new Contract(
     envConfig.addressEntryPoint,
     EntryPointAbi,
+    signerOrProvider
+  )
+}
+
+export async function getContractAccount(address: string, signerOrProvider?: providers.Provider | Signer) {
+  if (!signerOrProvider) signerOrProvider = await getSignerOrProvider()
+
+  return new Contract(
+    address,
+    AccountAbi,
     signerOrProvider
   )
 }

@@ -31,10 +31,10 @@ const zpGoerliChain: Chain = {
   },
   rpcUrls: {
     default: {
-      http: ["http://127.0.0.1:4337"],
+      http: [envConfig.goerliBundlerRpc],
     },
     public: {
-      http: ["http://127.0.0.1:4337"],
+      http: [envConfig.goerliBundlerRpc],
     },
   },
   blockExplorers: {
@@ -49,6 +49,8 @@ const zpGoerliChain: Chain = {
   },
   testnet: true,
 }
+
+console.warn(zpGoerliChain)
 
 const { chains, provider } = configureChains(
   [arbitrumGoerli, zpGoerliChain, goerli],

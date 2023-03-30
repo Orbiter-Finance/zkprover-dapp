@@ -9,15 +9,18 @@ import {
   sendTransaction,
   switchNetwork,
 } from "@wagmi/core"
-import { ContractTransaction, utils } from "ethers"
+import { BigNumber, ContractTransaction, utils } from "ethers"
 import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
 import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
 
 import {
+  getContractAccount,
   getContractAccountFactory,
+  getContractEntryPoint,
   getContractTokenZPB,
 } from "@/config/contracts"
+import { defaultsForUserOp } from "@/lib/user_operation"
 import { cn } from "@/lib/utils"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
@@ -34,6 +37,8 @@ const cardTitleClass = "font-extrabold text-center mb-4"
 const cardPClass = "mb-4"
 const cardPSmClass = "text-sm font-medium"
 
+const AA_SALT = "0x0"
+
 function useErrorToast() {
   const { toast } = useToast()
   return (description: string) => {
@@ -42,6 +47,88 @@ function useErrorToast() {
       title: "Uh oh! Something went wrong.",
       description,
     })
+  }
+}
+
+function useAAInfo(autoFetchAAInfo: boolean) {
+  const provider = useProvider()
+  const account = useAccount()
+  const errorToast = useErrorToast()
+
+  const [aaAddress, setAAAddress] = useState("")
+  const [aaBalance, setAABalance] = useState("")
+  const [aaDeployStatus, setAADeployStatus] = useState(0)
+  const [aaDeploying, setAADeploying] = useState(false)
+  const [aaDeployHash, setAADeployHash] = useState("")
+
+  const fetchAAInfo = async () => {
+    const address = account?.address
+    if (!address) return
+
+    setAAAddress("")
+    setAABalance("")
+    setAADeployStatus(0)
+
+    try {
+      const accountFactory = await getContractAccountFactory()
+      const _aaAddress =
+        (await accountFactory.getAddress(address, AA_SALT)) + ""
+
+      if (!_aaAddress) return
+
+      setAAAddress(_aaAddress)
+
+      await Promise.all([
+        provider
+          .getBalance(_aaAddress)
+          .then((_balance) => setAABalance(_balance + "")),
+        provider.getCode(_aaAddress).then((_code) => {
+          setAADeployStatus(_code.length > 9 ? 1 : -1) // '0x' or 'undefined'
+        }),
+      ])
+    } catch (e) {}
+  }
+
+  useEffect(() => {
+    if (autoFetchAAInfo) fetchAAInfo()
+  }, [account.address, provider])
+
+  const handleAADeploy = async () => {
+    try {
+      if (aaDeploying) {
+        return
+      }
+
+      setAADeploying(true)
+      setAADeployHash("")
+
+      await ensureNetwork(goerli.id)
+
+      const resp: ContractTransaction = await (
+        await getContractAccountFactory()
+      ).createAccount(account.address, AA_SALT)
+
+      setAADeployHash(resp.hash)
+
+      await resp.wait()
+
+      setAADeployStatus(1)
+    } catch (e) {
+      errorToast(e.message)
+    } finally {
+      setAADeploying(false)
+    }
+  }
+
+  return {
+    aaAddress,
+    aaBalance,
+    aaDeployStatus,
+    aaDeploying,
+    aaDeployHash,
+
+    fetchAAInfo,
+    handleAADeploy,
   }
 }
 
@@ -70,8 +157,6 @@ function AccountRequire(props: PropsWithChildren) {
 }
 
 function FaucetCard(props: { isAA?: boolean }) {
-  const AA_SALT = "0x0"
-
   const errorToast = useErrorToast()
 
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
@@ -84,11 +169,15 @@ function FaucetCard(props: { isAA?: boolean }) {
   const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
   const [faucetZPBTxHash, setFaucetZPBTxHash] = useState("")
 
-  const [aaAddress, setAAAddress] = useState("")
-  const [aaBalance, setAABalance] = useState("")
-  const [aaDeployStatus, setAADeployStatus] = useState(0)
-  const [aaDeploying, setAADeploying] = useState(false)
-  const [aaDeployHash, setAADeployHash] = useState("")
+  const {
+    aaAddress,
+    aaBalance,
+    aaDeployStatus,
+    aaDeploying,
+    aaDeployHash,
+
+    handleAADeploy,
+  } = useAAInfo(props.isAA)
 
   const fetchBalanceZPB = async () => {
     const address = account?.address
@@ -101,41 +190,10 @@ function FaucetCard(props: { isAA?: boolean }) {
       setBalanceZPB(utils.formatEther(balance + ""))
     } catch (e) {}
   }
-  const fetchAAInfo = async () => {
-    const address = account?.address
-    if (!address || !props.isAA) return
-
-    setAAAddress("")
-    setAABalance("")
-    setAADeployStatus(0)
-
-    try {
-      const accountFactory = await getContractAccountFactory()
-      const _aaAddress =
-        (await accountFactory.getAddress(address, AA_SALT)) + ""
-
-      if (!_aaAddress) return
-
-      setAAAddress(_aaAddress)
-
-      await Promise.all([
-        provider
-          .getBalance(_aaAddress)
-          .then((_balance) => setAABalance(_balance + "")),
-        provider.getCode(_aaAddress).then((_code) => {
-          setAADeployStatus(_code.length > 9 ? 1 : -1) // '0x' or 'undefined'
-        }),
-      ])
-    } catch (e) {}
-  }
 
   useEffect(() => {
-    if (props.isAA) {
-      fetchAAInfo()
-    } else {
-      setBalanceZPB("")
-      fetchBalanceZPB()
-    }
+    setBalanceZPB("")
+    fetchBalanceZPB()
   }, [account.address, provider])
   useEffect(() => {
     if (props.isAA) {
@@ -184,33 +242,6 @@ function FaucetCard(props: { isAA?: boolean }) {
     }
   }
 
-  const handleClickAADeploy = async () => {
-    try {
-      if (aaDeploying) {
-        return
-      }
-
-      setAADeploying(true)
-      setAADeployHash("")
-
-      await ensureNetwork(goerli.id)
-
-      const resp: ContractTransaction = await (
-        await getContractAccountFactory()
-      ).createAccount(account.address, AA_SALT)
-
-      setAADeployHash(resp.hash)
-
-      await resp.wait()
-
-      setAADeployStatus(1)
-    } catch (e) {
-      errorToast(e.message)
-    } finally {
-      setAADeploying(false)
-    }
-  }
-
   const ActiveButtuns = () => {
     if (props.isAA && aaDeployStatus == 0)
       return (
@@ -222,7 +253,7 @@ function FaucetCard(props: { isAA?: boolean }) {
 
     if (props.isAA && aaDeployStatus == -1)
       return (
-        <Button disabled={aaDeploying} onClick={handleClickAADeploy}>
+        <Button disabled={aaDeploying} onClick={handleAADeploy}>
           {aaDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Deploy AA Contract
         </Button>
@@ -309,26 +340,67 @@ export default function IndexPage() {
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
 
+  const { aaAddress } = useAAInfo(true)
+
   const handleClickSendErc20 = async () => {
     try {
-      if (sendErc20Loading) {
+      if (!aaAddress || sendErc20Loading) {
         return
       }
+
+      if (!erc20Receiver) {
+        errorToast("Please input receiver address")
+        return
+      }
+      if (!erc20Amount) {
+        errorToast("Please input correct transfer amount")
+        return
+      }
+
+      await ensureNetwork(0x4337)
 
       setSendErc20Loading(true)
       setSendErc20Hash("")
 
-      // Todo
-      const config = await prepareSendTransaction({
-        request: {
-          type: TransactionTypes.eip1559,
-          to: erc20Receiver,
-          value: parseEther(erc20Amount),
-        },
-      })
-      const { hash } = await sendTransaction(config)
+      const aaAcount = await getContractAccount(aaAddress)
+      const tokenZPB = await getContractTokenZPB()
+      const entryPoint = await getContractEntryPoint()
 
-      setSendErc20Hash(hash)
+      const transferCallData = (
+        await tokenZPB.populateTransaction.transfer(
+          erc20Receiver,
+          parseEther(erc20Amount)
+        )
+      ).data
+      const callData = (
+        await aaAcount.populateTransaction.execute(
+          tokenZPB.address,
+          0,
+          transferCallData!
+        )
+      ).data
+
+      const nonce = (await aaAcount.nonce()) + ""
+
+      const op = {
+        ...defaultsForUserOp,
+        sender: aaAcount.address,
+        nonce,
+        callData: callData!,
+        callGasLimit: 10000000, // TODO
+        maxFeePerGas: BigNumber.from(1016982020), // TODO
+      }
+
+      // const { hash } = await entryPoint.simulateHandleOp(op)
+      const result = await entryPoint.simulateHandleOp(op, {
+        type: TransactionTypes.legacy,
+      })
+      console.warn("result:", result)
+
+      // Todo
+      // const { hash } = await sendTransaction(config)
+
+      // setSendErc20Hash(hash)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -338,24 +410,63 @@ export default function IndexPage() {
 
   const handleClickSendEth = async () => {
     try {
-      if (sendEthLoading) {
+      if (!aaAddress || sendEthLoading) {
         return
       }
 
       setSendEthLoading(true)
       setSendEthHash("")
 
-      // Todo
-      const config = await prepareSendTransaction({
-        request: {
-          // type: TransactionTypes.eip1559,
-          to: ethReceiver,
-          value: parseEther(ethAmount),
-        },
-      })
-      const { hash } = await sendTransaction(config)
+      if (!aaAddress || sendErc20Loading) {
+        return
+      }
 
-      setSendEthHash(hash)
+      if (!ethReceiver) {
+        errorToast("Please input receiver address")
+        return
+      }
+      if (!ethAmount) {
+        errorToast("Please input correct transfer amount")
+        return
+      }
+
+      await ensureNetwork(0x4337)
+
+      setSendEthLoading(true)
+      setSendErc20Hash("")
+
+      const aaAcount = await getContractAccount(aaAddress)
+      const entryPoint = await getContractEntryPoint()
+
+      const callData = (
+        await aaAcount.populateTransaction.execute(
+          ethReceiver,
+          parseEther(ethAmount),
+          "0x"
+        )
+      ).data
+
+      const nonce = (await aaAcount.nonce()) + ""
+
+      const op = {
+        ...defaultsForUserOp,
+        sender: aaAcount.address,
+        nonce,
+        callData: callData!,
+        callGasLimit: 10000000, // TODO
+        maxFeePerGas: BigNumber.from(1016982020), // TODO
+      }
+
+      // const { hash } = await entryPoint.simulateHandleOp(op)
+      const result = await entryPoint.simulateHandleOp(op, {
+        type: TransactionTypes.legacy,
+      })
+      console.warn("result:", result)
+
+      // Todo
+      // const { hash } = await sendTransaction(config)
+
+      // setSendEthHash(hash)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -441,15 +552,15 @@ export default function IndexPage() {
                       onChange={(v) => setErc20Amount(v.target.value)}
                     />
                   </p>
-                  <p className={cardPSmClass}>
-                    Gas:<span className="ml-2">0.0004 ETH</span>
+                  <p className={cn(cardPSmClass, "text-slate-500")}>
+                    Estimate Gas:<span className="ml-2">0.0004 ETH</span>
                   </p>
-                  <p className={cardPSmClass}>
-                    Time:<span className="ml-2">15 s</span>
+                  <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
+                    Time:<span className="ml-2">~ 15 s</span>
                   </p>
-                  <p className={cn(cardPSmClass, "mb-4")}>
+                  {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
-                  </p>
+                  </p> */}
                   <p className={cn(cardPClass, "flex")}>
                     <Button
                       disabled={sendErc20Loading}
@@ -494,15 +605,15 @@ export default function IndexPage() {
                       onChange={(v) => setEthAmount(v.target.value)}
                     />
                   </p>
-                  <p className={cardPSmClass}>
-                    Gas:<span className="ml-2">0.0004 ETH</span>
+                  <p className={cn(cardPSmClass, "text-slate-500")}>
+                    Estimate Gas:<span className="ml-2">0.0004 ETH</span>
                   </p>
-                  <p className={cardPSmClass}>
-                    Time:<span className="ml-2">15 s</span>
+                  <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
+                    Time:<span className="ml-2">~ 15 s</span>
                   </p>
-                  <p className={cn(cardPSmClass, "mb-4")}>
+                  {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
-                  </p>
+                  </p> */}
                   <p className={cn(cardPClass, "flex")}>
                     <Button
                       disabled={sendEthLoading}
