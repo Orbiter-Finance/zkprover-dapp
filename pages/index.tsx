@@ -414,11 +414,15 @@ export default function IndexPage() {
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
 
-  const { aaAddress } = useAAInfo(true)
+  const { aaAddress, aaDeployStatus } = useAAInfo(true)
 
   const handleClickSendErc20 = async () => {
     try {
       if (!aaAddress || sendErc20Loading) {
+        return
+      }
+      if (aaDeployStatus != 1) {
+        errorToast("Please deploy the account contract!")
         return
       }
 
@@ -486,6 +490,10 @@ export default function IndexPage() {
   const handleClickSendEth = async () => {
     try {
       if (!aaAddress || sendEthLoading) {
+        return
+      }
+      if (aaDeployStatus != 1) {
+        errorToast("Please deploy the account contract!")
         return
       }
 
