@@ -1,11 +1,12 @@
 import "@/styles/globals.css"
+import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit"
+
 import "@rainbow-me/rainbowkit/styles.css"
 import type { AppProps } from "next/app"
 import { Inter as FontSans } from "next/font/google"
-import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit"
 import { ThemeProvider } from "next-themes"
 import { Chain, WagmiConfig, configureChains, createClient } from "wagmi"
-import { arbitrumGoerli, goerli } from "wagmi/chains"
+import { goerli } from "wagmi/chains"
 import { alchemyProvider } from "wagmi/providers/alchemy"
 import { publicProvider } from "wagmi/providers/public"
 
@@ -50,10 +51,8 @@ const zpGoerliChain: Chain = {
   testnet: true,
 }
 
-console.warn(zpGoerliChain)
-
 const { chains, provider } = configureChains(
-  [arbitrumGoerli, zpGoerliChain, goerli],
+  [zpGoerliChain, goerli],
   [alchemyProvider({ apiKey: envConfig.alchemyApiKey }), publicProvider()]
 )
 

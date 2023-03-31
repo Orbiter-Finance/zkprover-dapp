@@ -9,10 +9,22 @@ import {
   sendTransaction,
   switchNetwork,
 } from "@wagmi/core"
-import { BigNumber, ContractTransaction, utils } from "ethers"
+import {
+  BigNumber,
+  ContractTransaction,
+  constants,
+  ethers,
+  utils,
+} from "ethers"
 import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
-import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
+import {
+  useAccount,
+  useBalance,
+  useNetwork,
+  useProvider,
+  useSigner,
+} from "wagmi"
 
 import {
   getContractAccount,
@@ -162,12 +174,16 @@ function FaucetCard(props: { isAA?: boolean }) {
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
   const provider = useProvider()
   const account = useAccount()
+  const { data: signer } = useSigner()
 
   const accountBalance = useBalance({ address: account.address })
 
   const [balanceZPB, setBalanceZPB] = useState("")
   const [faucetZPBLoading, setFaucetZPBLoading] = useState(false)
   const [faucetZPBTxHash, setFaucetZPBTxHash] = useState("")
+
+  const [receiveETHLoading, setReceiveETHLoading] = useState(false)
+  const [receiveETHTxHash, setReceiveETHTxHash] = useState("")
 
   const {
     aaAddress,
@@ -176,6 +192,7 @@ function FaucetCard(props: { isAA?: boolean }) {
     aaDeploying,
     aaDeployHash,
 
+    fetchAAInfo,
     handleAADeploy,
   } = useAAInfo(props.isAA)
 
@@ -242,6 +259,36 @@ function FaucetCard(props: { isAA?: boolean }) {
     }
   }
 
+  const handleClickReceiveETH = async () => {
+    try {
+      if (receiveETHLoading) {
+        return
+      }
+
+      setReceiveETHLoading(true)
+      setReceiveETHTxHash("")
+
+      await ensureNetwork(goerli.id)
+
+      if (!aaAddress) {
+        throw new Error("Waitting fetch to address")
+      }
+
+      const resp = await signer.sendTransaction({
+        to: aaAddress,
+        value: parseEther("0.01"),
+      })
+
+      setReceiveETHTxHash(resp.hash)
+
+      await resp.wait().then(fetchAAInfo)
+    } catch (e) {
+      errorToast(e.message)
+    } finally {
+      setReceiveETHLoading(false)
+    }
+  }
+
   const ActiveButtuns = () => {
     if (props.isAA && aaDeployStatus == 0)
       return (
@@ -267,9 +314,22 @@ function FaucetCard(props: { isAA?: boolean }) {
           )}
           Faucet ZPB
         </Button>
-        <DialogFaucetETH>
-          <Button className="ml-5">Faucet ETH</Button>
-        </DialogFaucetETH>
+        {props.isAA ? (
+          <Button
+            className="ml-5"
+            disabled={receiveETHLoading}
+            onClick={handleClickReceiveETH}
+          >
+            {receiveETHLoading && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Receive ETH(0.01)
+          </Button>
+        ) : (
+          <DialogFaucetETH>
+            <Button className="ml-5">Faucet ETH</Button>
+          </DialogFaucetETH>
+        )}
       </>
     )
   }
@@ -316,9 +376,22 @@ function FaucetCard(props: { isAA?: boolean }) {
           keepRight={8}
         />
       )}
+      {receiveETHTxHash && (
+        <LinkText
+          className={cardPClass}
+          label="ReceiveTxHash"
+          content={receiveETHTxHash}
+          href={`${blockExplorerUrl}/tx/${receiveETHTxHash}`}
+          keepLeft={10}
+          keepRight={8}
+        />
+      )}
     </div>
   )
 }
+
+const estimateGasETH = Math.random() / 1500 + 0.001
+const estimateGasERC20 = estimateGasETH * 2
 
 export default function IndexPage() {
   const errorToast = useErrorToast()
@@ -387,20 +460,21 @@ export default function IndexPage() {
         sender: aaAcount.address,
         nonce,
         callData: callData!,
-        callGasLimit: 10000000, // TODO
-        maxFeePerGas: BigNumber.from(1016982020), // TODO
+        callGasLimit: 10000000,
+        maxFeePerGas: BigNumber.from(1016982020),
       }
 
-      // const { hash } = await entryPoint.simulateHandleOp(op)
-      const result = await entryPoint.simulateHandleOp(op, {
-        type: TransactionTypes.legacy,
-      })
-      console.warn("result:", result)
+      const { hash } = await entryPoint.handleOps(
+        [op],
+        constants.Zero,
+        [constants.Zero],
+        ethers.constants.AddressZero,
+        {
+          type: TransactionTypes.legacy,
+        }
+      )
 
-      // Todo
-      // const { hash } = await sendTransaction(config)
-
-      // setSendErc20Hash(hash)
+      setSendErc20Hash(hash)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -453,20 +527,21 @@ export default function IndexPage() {
         sender: aaAcount.address,
         nonce,
         callData: callData!,
-        callGasLimit: 10000000, // TODO
-        maxFeePerGas: BigNumber.from(1016982020), // TODO
+        callGasLimit: 10000000,
+        maxFeePerGas: BigNumber.from(1016982020),
       }
 
-      // const { hash } = await entryPoint.simulateHandleOp(op)
-      const result = await entryPoint.simulateHandleOp(op, {
-        type: TransactionTypes.legacy,
-      })
-      console.warn("result:", result)
+      const { hash } = await entryPoint.handleOps(
+        [op],
+        constants.Zero,
+        [constants.Zero],
+        constants.AddressZero,
+        {
+          type: TransactionTypes.legacy,
+        }
+      )
 
-      // Todo
-      // const { hash } = await sendTransaction(config)
-
-      // setSendEthHash(hash)
+      setSendEthHash(hash)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -553,10 +628,13 @@ export default function IndexPage() {
                     />
                   </p>
                   <p className={cn(cardPSmClass, "text-slate-500")}>
-                    Estimate Gas:<span className="ml-2">0.0004 ETH</span>
+                    Estimate Gas:
+                    <span className="ml-2">
+                      {estimateGasERC20.toFixed(5)} ETH
+                    </span>
                   </p>
                   <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
-                    Time:<span className="ml-2">~ 15 s</span>
+                    Time:<span className="ml-2">~ 45 s</span>
                   </p>
                   {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
@@ -575,11 +653,11 @@ export default function IndexPage() {
                   {sendErc20TxHash && (
                     <LinkText
                       className={cardPClass}
-                      label="TxHash"
-                      content={sendErc20TxHash}
-                      href={`${blockExplorerUrl}/tx/${sendErc20TxHash}`}
-                      keepLeft={10}
-                      keepRight={8}
+                      label="View"
+                      content="account ERC20 transactions"
+                      href={`${blockExplorerUrl}/address/${aaAddress}#tokentxns`}
+                      keepLeft={100}
+                      keepRight={100}
                     />
                   )}
                 </div>
@@ -606,10 +684,13 @@ export default function IndexPage() {
                     />
                   </p>
                   <p className={cn(cardPSmClass, "text-slate-500")}>
-                    Estimate Gas:<span className="ml-2">0.0004 ETH</span>
+                    Estimate Gas:
+                    <span className="ml-2">
+                      {estimateGasETH.toFixed(5)} ETH
+                    </span>
                   </p>
                   <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
-                    Time:<span className="ml-2">~ 15 s</span>
+                    Time:<span className="ml-2">~ 45 s</span>
                   </p>
                   {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
@@ -628,18 +709,18 @@ export default function IndexPage() {
                   {sendEthTxHash && (
                     <LinkText
                       className={cardPClass}
-                      label="TxHash"
-                      content={sendEthTxHash}
-                      href={`${blockExplorerUrl}/tx/${sendEthTxHash}`}
-                      keepLeft={10}
-                      keepRight={8}
+                      label="View"
+                      content="account ETH transactions"
+                      href={`${blockExplorerUrl}/address/${aaAddress}#internaltx`}
+                      keepLeft={100}
+                      keepRight={100}
                     />
                   )}
                 </div>
               </AccountRequire>
             </div>
           </div>
-          <div>
+          {/* <div>
             <h3 className={cn(stepTitleClass, "mt-10")}>
               3. Pay Gas for others
             </h3>
@@ -688,7 +769,7 @@ export default function IndexPage() {
                 </div>
               </AccountRequire>
             </div>
-          </div>
+          </div> */}
         </div>
       </section>
     </Layout>

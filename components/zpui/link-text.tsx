@@ -21,7 +21,8 @@ export function LinkText(props: PropsWithChildren & LinkTextProps) {
 
   return (
     <p className={cn(props.className, "flex items-center")}>
-      {props.label}:&nbsp;{content}
+      {props.label && props.label + ": "}
+      {content}
       <a
         target="_blank"
         href={props.href}
