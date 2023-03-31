@@ -276,7 +276,7 @@ function FaucetCard(props: { isAA?: boolean }) {
 
       const resp = await signer.sendTransaction({
         to: aaAddress,
-        value: parseEther("0.01"),
+        value: parseEther("0.1"),
       })
 
       setReceiveETHTxHash(resp.hash)
@@ -323,7 +323,7 @@ function FaucetCard(props: { isAA?: boolean }) {
             {receiveETHLoading && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            Receive ETH(0.01)
+            Receive ETH(0.1)
           </Button>
         ) : (
           <DialogFaucetETH>
