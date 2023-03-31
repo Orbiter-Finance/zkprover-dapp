@@ -3,6 +3,7 @@ import Head from "next/head"
 import { useToast } from "@/hooks/use-toast"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
 import {
+  fetchSigner,
   getProvider,
   goerli,
   prepareSendTransaction,
@@ -174,7 +175,6 @@ function FaucetCard(props: { isAA?: boolean }) {
   const blockExplorerUrl = useNetwork().chain?.blockExplorers?.default?.url
   const provider = useProvider()
   const account = useAccount()
-  const { data: signer } = useSigner()
 
   const accountBalance = useBalance({ address: account.address })
 
@@ -274,6 +274,7 @@ function FaucetCard(props: { isAA?: boolean }) {
         throw new Error("Waitting fetch to address")
       }
 
+      const signer = await fetchSigner()
       const resp = await signer.sendTransaction({
         to: aaAddress,
         value: parseEther("0.1"),
