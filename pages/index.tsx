@@ -19,13 +19,7 @@ import {
 } from "ethers"
 import { TransactionTypes, parseEther } from "ethers/lib/utils.js"
 import { Loader2 } from "lucide-react"
-import {
-  useAccount,
-  useBalance,
-  useNetwork,
-  useProvider,
-  useSigner,
-} from "wagmi"
+import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
 
 import {
   getContractAccount,
@@ -152,6 +146,19 @@ async function ensureNetwork(targetChainId: number) {
   }
 }
 
+async function fetchBalanceZPB(address: string) {
+  if (!address) return undefined
+
+  try {
+    const contract = await getContractTokenZPB()
+    const balance = await contract.balanceOf(address)
+
+    return utils.formatEther(balance + "")
+  } catch (e) {
+    return undefined
+  }
+}
+
 function AccountRequire(props: PropsWithChildren) {
   const { isConnected } = useAccount()
   const { openConnectModal } = useConnectModal()
@@ -196,26 +203,21 @@ function FaucetCard(props: { isAA?: boolean }) {
     handleAADeploy,
   } = useAAInfo(props.isAA)
 
-  const fetchBalanceZPB = async () => {
-    const address = account?.address
-    if (!address) return
-
-    try {
-      const contract = await getContractTokenZPB()
-      const balance = await contract.balanceOf(props.isAA ? aaAddress : address)
-
-      setBalanceZPB(utils.formatEther(balance + ""))
-    } catch (e) {}
+  const updateBalanceZPB = async () => {
+    const balance = await fetchBalanceZPB(
+      props.isAA ? aaAddress : account?.address
+    )
+    if (balance) setBalanceZPB(balance)
   }
 
   useEffect(() => {
     setBalanceZPB("")
-    fetchBalanceZPB()
+    updateBalanceZPB()
   }, [account.address, provider])
   useEffect(() => {
     if (props.isAA) {
       setBalanceZPB("")
-      fetchBalanceZPB()
+      updateBalanceZPB()
     }
   }, [aaAddress])
 
@@ -251,7 +253,7 @@ function FaucetCard(props: { isAA?: boolean }) {
 
       setFaucetZPBTxHash(resp.hash)
 
-      await resp.wait().then(fetchBalanceZPB)
+      await resp.wait().then(updateBalanceZPB)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -435,6 +437,12 @@ export default function IndexPage() {
         return
       }
 
+      const balanceZPB = await fetchBalanceZPB(aaAddress)
+      if (Number(erc20Amount) > Number(balanceZPB)) {
+        errorToast("ZPB Insufficient funds")
+        return
+      }
+
       await ensureNetwork(0x4337)
 
       setSendErc20Loading(true)
@@ -510,6 +518,15 @@ export default function IndexPage() {
       }
       if (!ethAmount) {
         errorToast("Please input correct transfer amount")
+        return
+      }
+
+      const balanceETH = await getProvider().getBalance(aaAddress)
+      if (
+        Number(ethAmount) + estimateGasETH >
+        Number(utils.formatEther(balanceETH))
+      ) {
+        errorToast("ETH Insufficient funds(Including estimated gas)!")
         return
       }
 
