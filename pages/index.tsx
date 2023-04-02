@@ -89,9 +89,9 @@ function useAAInfo(autoFetchAAInfo: boolean) {
         provider
           .getBalance(_aaAddress)
           .then((_balance) => setAABalance(_balance + "")),
-        provider.getCode(_aaAddress).then((_code) => {
-          setAADeployStatus(_code.length > 9 ? 1 : -1) // '0x' or 'undefined'
-        }),
+        isAADeployed(_aaAddress).then((_flag) =>
+          setAADeployStatus(_flag ? 1 : -1)
+        ),
       ])
     } catch (e) {}
   }
@@ -120,6 +120,7 @@ function useAAInfo(autoFetchAAInfo: boolean) {
       await resp.wait()
 
       setAADeployStatus(1)
+      aaDeployedCache[aaAddress] = true
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -157,6 +158,14 @@ async function fetchBalanceZPB(address: string) {
   } catch (e) {
     return undefined
   }
+}
+
+const aaDeployedCache: { [key: string]: boolean } = {}
+async function isAADeployed(aaAddress: string) {
+  if (aaDeployedCache[aaAddress] === true) return true
+
+  const code = await getProvider().getCode(aaAddress)
+  return (aaDeployedCache[aaAddress] = code.length > 9) // '0x' or 'undefined'
 }
 
 function AccountRequire(props: PropsWithChildren) {
@@ -423,7 +432,9 @@ export default function IndexPage() {
       if (!aaAddress || sendErc20Loading) {
         return
       }
-      if (aaDeployStatus != 1) {
+
+      const isDeployed = await isAADeployed(aaAddress)
+      if (!isDeployed) {
         errorToast("Please deploy the account contract!")
         return
       }
@@ -500,7 +511,9 @@ export default function IndexPage() {
       if (!aaAddress || sendEthLoading) {
         return
       }
-      if (aaDeployStatus != 1) {
+
+      const isDeployed = await isAADeployed(aaAddress)
+      if (!isDeployed) {
         errorToast("Please deploy the account contract!")
         return
       }
