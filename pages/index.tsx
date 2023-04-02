@@ -1,6 +1,8 @@
-import { PropsWithChildren, useEffect, useState } from "react"
+import { PropsWithChildren, useContext, useEffect, useState } from "react"
 import Head from "next/head"
-import { useToast } from "@/hooks/use-toast"
+import { AAInfoContext, AAInfoProvider } from "@/hooks/use-aa-info"
+// import { useAAInfo } from "@/hooks/use-aa-info"
+import { useErrorToast } from "@/hooks/use-error-toast"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
 import {
   fetchSigner,
@@ -8,7 +10,6 @@ import {
   goerli,
   prepareSendTransaction,
   sendTransaction,
-  switchNetwork,
 } from "@wagmi/core"
 import {
   BigNumber,
@@ -23,12 +24,11 @@ import { useAccount, useBalance, useNetwork, useProvider } from "wagmi"
 
 import {
   getContractAccount,
-  getContractAccountFactory,
   getContractEntryPoint,
   getContractTokenZPB,
 } from "@/config/contracts"
 import { defaultsForUserOp } from "@/lib/user_operation"
-import { cn } from "@/lib/utils"
+import { cn, ensureNetwork } from "@/lib/utils"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,109 +44,6 @@ const cardTitleClass = "font-extrabold text-center mb-4"
 const cardPClass = "mb-4"
 const cardPSmClass = "text-sm font-medium"
 
-const AA_SALT = "0x0"
-
-function useErrorToast() {
-  const { toast } = useToast()
-  return (description: string) => {
-    toast({
-      variant: "destructive",
-      title: "Uh oh! Something went wrong.",
-      description,
-    })
-  }
-}
-
-function useAAInfo(autoFetchAAInfo: boolean) {
-  const provider = useProvider()
-  const account = useAccount()
-  const errorToast = useErrorToast()
-
-  const [aaAddress, setAAAddress] = useState("")
-  const [aaBalance, setAABalance] = useState("")
-  const [aaDeployStatus, setAADeployStatus] = useState(0)
-  const [aaDeploying, setAADeploying] = useState(false)
-  const [aaDeployHash, setAADeployHash] = useState("")
-
-  const fetchAAInfo = async () => {
-    const address = account?.address
-    if (!address) return
-
-    setAAAddress("")
-    setAABalance("")
-    setAADeployStatus(0)
-
-    try {
-      const accountFactory = await getContractAccountFactory()
-      const _aaAddress =
-        (await accountFactory.getAddress(address, AA_SALT)) + ""
-
-      if (!_aaAddress) return
-
-      setAAAddress(_aaAddress)
-
-      await Promise.all([
-        provider
-          .getBalance(_aaAddress)
-          .then((_balance) => setAABalance(_balance + "")),
-        isAADeployed(_aaAddress).then((_flag) =>
-          setAADeployStatus(_flag ? 1 : -1)
-        ),
-      ])
-    } catch (e) {}
-  }
-
-  useEffect(() => {
-    if (autoFetchAAInfo) fetchAAInfo()
-  }, [account.address, provider])
-
-  const handleAADeploy = async () => {
-    try {
-      if (aaDeploying) {
-        return
-      }
-
-      setAADeploying(true)
-      setAADeployHash("")
-
-      await ensureNetwork(goerli.id)
-
-      const resp: ContractTransaction = await (
-        await getContractAccountFactory()
-      ).createAccount(account.address, AA_SALT)
-
-      setAADeployHash(resp.hash)
-
-      await resp.wait()
-
-      setAADeployStatus(1)
-      aaDeployedCache[aaAddress] = true
-    } catch (e) {
-      errorToast(e.message)
-    } finally {
-      setAADeploying(false)
-    }
-  }
-
-  return {
-    aaAddress,
-    aaBalance,
-    aaDeployStatus,
-    aaDeploying,
-    aaDeployHash,
-
-    fetchAAInfo,
-    handleAADeploy,
-  }
-}
-
-async function ensureNetwork(targetChainId: number) {
-  const currentChainId = getProvider()?.network?.chainId
-  if (currentChainId != targetChainId) {
-    await switchNetwork({ chainId: targetChainId })
-  }
-}
-
 async function fetchBalanceZPB(address: string) {
   if (!address) return undefined
 
@@ -158,14 +55,6 @@ async function fetchBalanceZPB(address: string) {
   } catch (e) {
     return undefined
   }
-}
-
-const aaDeployedCache: { [key: string]: boolean } = {}
-async function isAADeployed(aaAddress: string) {
-  if (aaDeployedCache[aaAddress] === true) return true
-
-  const code = await getProvider().getCode(aaAddress)
-  return (aaDeployedCache[aaAddress] = code.length > 9) // '0x' or 'undefined'
 }
 
 function AccountRequire(props: PropsWithChildren) {
@@ -202,15 +91,16 @@ function FaucetCard(props: { isAA?: boolean }) {
   const [receiveETHTxHash, setReceiveETHTxHash] = useState("")
 
   const {
-    aaAddress,
-    aaBalance,
-    aaDeployStatus,
-    aaDeploying,
-    aaDeployHash,
+    // aaInfo,
+    address: aaAddress,
+    balance: aaBalance,
+    deployStatus: aaDeployStatus,
+    deploying: aaDeploying,
+    deployHash: aaDeployHash,
 
-    fetchAAInfo,
-    handleAADeploy,
-  } = useAAInfo(props.isAA)
+    // fetchAAInfo,
+    // handleAADeploy,
+  } = useContext(AAInfoContext)
 
   const updateBalanceZPB = async () => {
     const balance = await fetchBalanceZPB(
@@ -288,12 +178,12 @@ function FaucetCard(props: { isAA?: boolean }) {
       const signer = await fetchSigner()
       const resp = await signer.sendTransaction({
         to: aaAddress,
-        value: parseEther("0.1"),
+        value: parseEther("0.01"),
       })
 
       setReceiveETHTxHash(resp.hash)
 
-      await resp.wait().then(fetchAAInfo)
+      // await resp.wait().then(fetchAAInfo)
     } catch (e) {
       errorToast(e.message)
     } finally {
@@ -312,7 +202,7 @@ function FaucetCard(props: { isAA?: boolean }) {
 
     if (props.isAA && aaDeployStatus == -1)
       return (
-        <Button disabled={aaDeploying} onClick={handleAADeploy}>
+        <Button disabled={aaDeploying} onClick={() => {}}>
           {aaDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Deploy AA Contract
         </Button>
@@ -327,16 +217,29 @@ function FaucetCard(props: { isAA?: boolean }) {
           Faucet ZPB
         </Button>
         {props.isAA ? (
-          <Button
-            className="ml-5"
-            disabled={receiveETHLoading}
-            onClick={handleClickReceiveETH}
-          >
-            {receiveETHLoading && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            Receive ETH(0.1)
-          </Button>
+          <>
+            <Button
+              className="ml-2"
+              disabled={receiveETHLoading}
+              onClick={handleClickReceiveETH}
+            >
+              {receiveETHLoading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Receive ETH(0.01)
+            </Button>
+
+            <Button
+              className="ml-2"
+              disabled={receiveETHLoading}
+              onClick={handleClickReceiveETH}
+            >
+              {receiveETHLoading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Deposit Gas(0.01)
+            </Button>
+          </>
         ) : (
           <DialogFaucetETH>
             <Button className="ml-5">Faucet ETH</Button>
@@ -356,10 +259,15 @@ function FaucetCard(props: { isAA?: boolean }) {
         label="Address"
         content={displayAddress()}
         href={`${blockExplorerUrl}/address/${displayAddress()}`}
+        keepLeft={6}
+        keepRight={6}
       />
       <p className={cardPClass}>
         Balance ETH:&nbsp;
         {displayBalanceETH()}
+        {props.isAA && (
+          <span className="text-sm"> (Deposited gas: 0.01 ETH)</span>
+        )}
       </p>
       <p className={cardPClass}>
         Balance ZPB:&nbsp;
@@ -425,7 +333,9 @@ export default function IndexPage() {
   const [gasLoading, setGasLoading] = useState(false)
   const [gasTxHash, setGasTxHash] = useState("")
 
-  const { aaAddress, aaDeployStatus } = useAAInfo(true)
+  // const { address: aaAddress, deployStatus: aaDeployStatus } =  useAAInfo(true)
+  const { address: aaAddress, deployStatus: aaDeployStatus } =
+    useContext(AAInfoContext)
 
   const handleClickSendErc20 = async () => {
     try {
@@ -433,8 +343,7 @@ export default function IndexPage() {
         return
       }
 
-      const isDeployed = await isAADeployed(aaAddress)
-      if (!isDeployed) {
+      if (aaDeployStatus != 1) {
         errorToast("Please deploy the account contract!")
         return
       }
@@ -512,8 +421,7 @@ export default function IndexPage() {
         return
       }
 
-      const isDeployed = await isAADeployed(aaAddress)
-      if (!isDeployed) {
+      if (aaDeployStatus != 1) {
         errorToast("Please deploy the account contract!")
         return
       }
@@ -617,149 +525,150 @@ export default function IndexPage() {
   }
 
   return (
-    <Layout>
-      <Head>
-        <title>zkprover-dapp</title>
-        <meta
-          name="description"
-          content="Next.js template for building apps with Radix UI and Tailwind CSS"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <section className="container grid items-center gap-6 pt-6 pb-8 md:py-10 justify-center">
-        <div className="flex max-w-[980px] flex-col items-start gap-2">
-          <div>
-            <h3 className={stepTitleClass}>1. Deploy your AA account</h3>
-            <div className="flex gap-x-7">
-              <AccountRequire>
-                <FaucetCard />
-                <FaucetCard isAA={true} />
-              </AccountRequire>
+    <AAInfoProvider>
+      <Layout>
+        <Head>
+          <title>zkprover-dapp</title>
+          <meta
+            name="description"
+            content="Next.js template for building apps with Radix UI and Tailwind CSS"
+          />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+        <section className="container grid items-center gap-6 pt-6 pb-8 md:py-10 justify-center">
+          <div className="flex max-w-[980px] flex-col items-start gap-2">
+            <div>
+              <h3 className={stepTitleClass}>1. Deploy your AA account</h3>
+              <div className="flex gap-x-7">
+                <AccountRequire>
+                  <FaucetCard />
+                  <FaucetCard isAA={true} />
+                </AccountRequire>
+              </div>
             </div>
-          </div>
-          <div>
-            <h3 className={cn(stepTitleClass, "mt-10")}>
-              2. Send transaction test
-            </h3>
-            <div className="flex gap-x-7">
-              <AccountRequire>
-                <div className={cn(cardClass, "w-96")}>
-                  <p className={cardTitleClass}>Send ERC20</p>
-                  <p className={cardPClass}>
-                    <Label htmlFor="erc20Receiver">Receiver</Label>
-                    <Input
-                      type="text"
-                      id="erc20Receiver"
-                      placeholder="Input receiver address"
-                      value={erc20Receiver}
-                      onChange={(v) => setErc20Receiver(v.target.value)}
-                    />
-                  </p>
-                  <p className={cardPClass}>
-                    <Label htmlFor="erc20Amount">Amount</Label>
-                    <Input
-                      type="number"
-                      id="erc20Amount"
-                      placeholder="Input transfer amount"
-                      value={erc20Amount}
-                      onChange={(v) => setErc20Amount(v.target.value)}
-                    />
-                  </p>
-                  <p className={cn(cardPSmClass, "text-slate-500")}>
-                    Estimate Gas:
-                    <span className="ml-2">
-                      {estimateGasERC20.toFixed(5)} ETH
-                    </span>
-                  </p>
-                  <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
-                    Time:<span className="ml-2">~ 45 s</span>
-                  </p>
-                  {/* <p className={cn(cardPSmClass, "mb-4")}>
+            <div>
+              <h3 className={cn(stepTitleClass, "mt-10")}>
+                2. Send transaction test
+              </h3>
+              <div className="flex gap-x-7">
+                <AccountRequire>
+                  <div className={cn(cardClass, "w-96")}>
+                    <p className={cardTitleClass}>Send ERC20</p>
+                    <p className={cardPClass}>
+                      <Label htmlFor="erc20Receiver">Receiver</Label>
+                      <Input
+                        type="text"
+                        id="erc20Receiver"
+                        placeholder="Input receiver address"
+                        value={erc20Receiver}
+                        onChange={(v) => setErc20Receiver(v.target.value)}
+                      />
+                    </p>
+                    <p className={cardPClass}>
+                      <Label htmlFor="erc20Amount">Amount</Label>
+                      <Input
+                        type="number"
+                        id="erc20Amount"
+                        placeholder="Input transfer amount"
+                        value={erc20Amount}
+                        onChange={(v) => setErc20Amount(v.target.value)}
+                      />
+                    </p>
+                    <p className={cn(cardPSmClass, "text-slate-500")}>
+                      Estimate Gas:
+                      <span className="ml-2">
+                        {estimateGasERC20.toFixed(5)} ETH
+                      </span>
+                    </p>
+                    <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
+                      Time:<span className="ml-2">~ 45 s</span>
+                    </p>
+                    {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
                   </p> */}
-                  <p className={cn(cardPClass, "flex")}>
-                    <Button
-                      disabled={sendErc20Loading}
-                      onClick={handleClickSendErc20}
-                    >
-                      {sendErc20Loading && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Send ERC20
-                    </Button>
-                  </p>
-                  {sendErc20TxHash && (
-                    <LinkText
-                      className={cardPClass}
-                      label="View"
-                      content="account ERC20 transactions"
-                      href={`${blockExplorerUrl}/address/${aaAddress}#tokentxns`}
-                      keepLeft={100}
-                      keepRight={100}
-                    />
-                  )}
-                </div>
-                <div className={cn(cardClass, "w-96")}>
-                  <p className={cardTitleClass}>Send ETH</p>
-                  <p className={cardPClass}>
-                    <Label htmlFor="ethReceiver">Receiver</Label>
-                    <Input
-                      type="text"
-                      id="ethReceiver"
-                      placeholder="Input receiver address"
-                      value={ethReceiver}
-                      onChange={(v) => setEthReceiver(v.target.value)}
-                    />
-                  </p>
-                  <p className={cardPClass}>
-                    <Label htmlFor="ethAmount">Amount</Label>
-                    <Input
-                      type="number"
-                      id="ethAmount"
-                      placeholder="Input transfer amount"
-                      value={ethAmount}
-                      onChange={(v) => setEthAmount(v.target.value)}
-                    />
-                  </p>
-                  <p className={cn(cardPSmClass, "text-slate-500")}>
-                    Estimate Gas:
-                    <span className="ml-2">
-                      {estimateGasETH.toFixed(5)} ETH
-                    </span>
-                  </p>
-                  <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
-                    Time:<span className="ml-2">~ 45 s</span>
-                  </p>
-                  {/* <p className={cn(cardPSmClass, "mb-4")}>
+                    <p className={cn(cardPClass, "flex")}>
+                      <Button
+                        disabled={sendErc20Loading}
+                        onClick={handleClickSendErc20}
+                      >
+                        {sendErc20Loading && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Send ERC20
+                      </Button>
+                    </p>
+                    {sendErc20TxHash && (
+                      <LinkText
+                        className={cardPClass}
+                        label="View"
+                        content="account ERC20 transactions"
+                        href={`${blockExplorerUrl}/address/${aaAddress}#tokentxns`}
+                        keepLeft={100}
+                        keepRight={100}
+                      />
+                    )}
+                  </div>
+                  <div className={cn(cardClass, "w-96")}>
+                    <p className={cardTitleClass}>Send ETH</p>
+                    <p className={cardPClass}>
+                      <Label htmlFor="ethReceiver">Receiver</Label>
+                      <Input
+                        type="text"
+                        id="ethReceiver"
+                        placeholder="Input receiver address"
+                        value={ethReceiver}
+                        onChange={(v) => setEthReceiver(v.target.value)}
+                      />
+                    </p>
+                    <p className={cardPClass}>
+                      <Label htmlFor="ethAmount">Amount</Label>
+                      <Input
+                        type="number"
+                        id="ethAmount"
+                        placeholder="Input transfer amount"
+                        value={ethAmount}
+                        onChange={(v) => setEthAmount(v.target.value)}
+                      />
+                    </p>
+                    <p className={cn(cardPSmClass, "text-slate-500")}>
+                      Estimate Gas:
+                      <span className="ml-2">
+                        {estimateGasETH.toFixed(5)} ETH
+                      </span>
+                    </p>
+                    <p className={cn(cardPSmClass, "mb-2 text-slate-500")}>
+                      Time:<span className="ml-2">~ 45 s</span>
+                    </p>
+                    {/* <p className={cn(cardPSmClass, "mb-4")}>
                     Save gas:<span className="ml-2">30%</span>
                   </p> */}
-                  <p className={cn(cardPClass, "flex")}>
-                    <Button
-                      disabled={sendEthLoading}
-                      onClick={handleClickSendEth}
-                    >
-                      {sendEthLoading && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Send ETH
-                    </Button>
-                  </p>
-                  {sendEthTxHash && (
-                    <LinkText
-                      className={cardPClass}
-                      label="View"
-                      content="account ETH transactions"
-                      href={`${blockExplorerUrl}/address/${aaAddress}#internaltx`}
-                      keepLeft={100}
-                      keepRight={100}
-                    />
-                  )}
-                </div>
-              </AccountRequire>
+                    <p className={cn(cardPClass, "flex")}>
+                      <Button
+                        disabled={sendEthLoading}
+                        onClick={handleClickSendEth}
+                      >
+                        {sendEthLoading && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Send ETH
+                      </Button>
+                    </p>
+                    {sendEthTxHash && (
+                      <LinkText
+                        className={cardPClass}
+                        label="View"
+                        content="account ETH transactions"
+                        href={`${blockExplorerUrl}/address/${aaAddress}#internaltx`}
+                        keepLeft={100}
+                        keepRight={100}
+                      />
+                    )}
+                  </div>
+                </AccountRequire>
+              </div>
             </div>
-          </div>
-          {/* <div>
+            {/* <div>
             <h3 className={cn(stepTitleClass, "mt-10")}>
               3. Pay Gas for others
             </h3>
@@ -809,8 +718,9 @@ export default function IndexPage() {
               </AccountRequire>
             </div>
           </div> */}
-        </div>
-      </section>
-    </Layout>
+          </div>
+        </section>
+      </Layout>
+    </AAInfoProvider>
   )
 }
