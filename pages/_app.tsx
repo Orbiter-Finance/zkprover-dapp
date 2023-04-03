@@ -11,6 +11,7 @@ import { alchemyProvider } from "wagmi/providers/alchemy"
 import { publicProvider } from "wagmi/providers/public"
 
 import { envConfig } from "@/config/env"
+import { AAInfoProvider } from "@/components/aa-info-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 const fontSans = FontSans({
@@ -82,10 +83,12 @@ export default function App({ Component, pageProps }: AppProps) {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <WagmiConfig client={wagmiClient}>
           <RainbowKitProvider chains={chains} modalSize="compact">
-            <Component {...pageProps} />
-            <Toaster />
+            <AAInfoProvider>
+              <Component {...pageProps} />
+            </AAInfoProvider>
           </RainbowKitProvider>
         </WagmiConfig>
+        <Toaster />
       </ThemeProvider>
     </>
   )
