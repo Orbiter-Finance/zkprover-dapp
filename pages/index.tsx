@@ -319,7 +319,7 @@ function FaucetCard(props: {
           keepRight={8}
         />
       )}
-      {aaDeployHash && (
+      {props.isAA && aaDeployHash && (
         <LinkText
           className={cardPClass}
           label="DeployTxHash"
