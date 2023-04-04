@@ -306,7 +306,7 @@ function FaucetCard(props: {
         Balance ZPB:&nbsp;
         {balanceZPB ? parseFloat(balanceZPB).toFixed(4) : "-"}
       </p>
-      <p className={cardPClass}>
+      <p className={cn(cardPClass, "flex")}>
         <ActiveButtuns />
       </p>
       {faucetZPBTxHash && (
